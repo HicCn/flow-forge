@@ -26,9 +26,17 @@ export default function LandingScreen() {
     try {
       const nodeDefs = useConfigStore.getState().getNodeDefs();
       const result = await exportRuntime('csharp', nodeDefs);
-      alert(`导出了 ${result.files.length} 个文件`);
+
+      if (!result.outputDir) return; // user cancelled
+
+      const parts: string[] = [];
+      if (result.generated.length > 0) parts.push(`${result.generated.length} 个节点类 → Generated/`);
+      if (result.runtimeFiles.length > 0) parts.push(`${result.runtimeFiles.length} 个基类 → Runtime/`);
+
+      alert(`导出完成\n\n${parts.join('\n')}\n\n目标目录: ${result.outputDir}`);
     } catch (err) {
       console.error('Export failed:', err);
+      alert(`导出失败: ${err}`);
     } finally {
       setExporting(false);
     }

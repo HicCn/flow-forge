@@ -34,6 +34,7 @@ export default function FlowCanvas() {
   const { t } = useT();
   const nodes = useEditorStore((s) => s.nodes);
   const edges = useEditorStore((s) => s.edges);
+  const selectedNodeIds = useEditorStore((s) => s.selectedNodeIds);
   const addNode = useEditorStore((s) => s.addNode);
   const addEdge = useEditorStore((s) => s.addEdge);
   const deleteNodes = useEditorStore((s) => s.deleteNodes);
@@ -192,7 +193,7 @@ export default function FlowCanvas() {
       onMouseUp={onCanvasMouseUp}
     >
       <ReactFlow
-        nodes={nodes}
+        nodes={nodes.map((n) => ({ ...n, selected: selectedNodeIds.includes(n.id) }))}
         edges={edges}
         onNodesChange={onNodesChange}
         onConnect={onConnect}

@@ -130,7 +130,60 @@ export async function loadFile(path: string): Promise<{ content: string; path: s
   }
 }
 
-/** Export generated runtime code — sends node definitions and flow data to server for generation */
-export async function exportRuntime(lang: 'csharp' | 'typescript', nodeDefs: unknown[], flowData?: unknown): Promise<{ files: { name: string; content: string }[] }> {
-  return browserFetch(`${SERVER_URL}/api/export-runtime`, { lang, nodeDefs, flowData });
+export interface ExportRuntimeResult {
+  /** Names of generated .gen.cs files */
+  generated: string[];
+  /** Runtime base files that were copied */
+  runtimeFiles: string[];
+  /** Runtime base files that were skipped (already exist) */
+  skippedRuntime: string[];
+  /** Output directory the files were written to */
+  outputDir: string;
+}
+
+/** Export generated runtime code.
+ *  Tauri mode: opens a directory picker, writes files to disk via Rust backend.
+ *  Browser mode: sends node definitions to the Node.js dev server. */
+export async function exportRuntime(
+  lang: 'csharp' | 'typescript',
+  nodeDefs: unknown[],
+  flowData?: unknown,
+): Promise<ExportRuntimeResult> {
+  if (await ensureTauri()) {
+    // Ask user to pick an output directory
+    const selected = await tauriDialog!.open({
+      directory: true,
+      multiple: false,
+      title: 'Select output directory for generated code',
+    });
+    if (!selected) {
+      return { generated: [], runtimeFiles: [], skippedRuntime: [], outputDir: '' };
+    }
+    const dir = typeof selected === 'string' ? selected : selected[0]!;
+
+    const result = (await tauriInvoke!('gen_runtime_cs', {
+      nodeDefs: JSON.stringify(nodeDefs),
+      outputDir: dir,
+      forceRuntime: false,
+    })) as { generated: string[]; runtime_files: string[]; skipped_runtime: string[] };
+
+    return {
+      generated: result.generated,
+      runtimeFiles: result.runtime_files,
+      skippedRuntime: result.skipped_runtime,
+      outputDir: dir,
+    };
+  } else {
+    // Browser dev fallback
+    const res = await browserFetch<{ files: { name: string; content: string }[] }>(
+      `${SERVER_URL}/api/export-runtime`,
+      { lang, nodeDefs, flowData },
+    );
+    return {
+      generated: res.files.map((f) => f.name),
+      runtimeFiles: [],
+      skippedRuntime: [],
+      outputDir: '',
+    };
+  }
 }

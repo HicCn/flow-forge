@@ -1,3 +1,5 @@
+mod code_generator;
+
 use std::fs;
 use std::path::PathBuf;
 use tauri::Manager;
@@ -44,6 +46,19 @@ fn read_sample_file(app_handle: tauri::AppHandle) -> Result<String, String> {
     })
 }
 
+#[tauri::command]
+fn gen_runtime_cs(
+    node_defs: String,
+    output_dir: String,
+    force_runtime: Option<bool>,
+) -> Result<code_generator::GenerateResult, String> {
+    code_generator::generate_runtime_cs(
+        &node_defs,
+        &output_dir,
+        force_runtime.unwrap_or(false),
+    )
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -54,6 +69,7 @@ pub fn run() {
             open_file,
             list_flow_files,
             read_sample_file,
+            gen_runtime_cs,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

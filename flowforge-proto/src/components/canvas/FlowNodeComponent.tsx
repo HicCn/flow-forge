@@ -1,11 +1,11 @@
-import React, { memo } from 'react';
-import { Handle, Position, type NodeProps } from '@xyflow/react';
+import React from 'react';
+import { Handle, Position } from '@xyflow/react';
 import type { FlowNodeData } from '../../types';
 import { useConfigStore } from '../../store/configStore';
 import { useEditorMetaStore } from '../../store/editorMetaStore';
 import { useT } from '../../i18n';
 
-function FlowNodeComponent({ data, selected, id: nodeId }: NodeProps) {
+function FlowNodeComponent({ data, selected, id: nodeId }: any) {
   const { t } = useT();
   const d = data as unknown as FlowNodeData;
   const comment = useEditorMetaStore((s) => s.comments[nodeId] ?? '');
@@ -26,12 +26,12 @@ function FlowNodeComponent({ data, selected, id: nodeId }: NodeProps) {
   return (
     <div
       style={{
-        background: 'var(--color-background-primary)',
+        background: selected ? 'rgba(55,138,221,0.06)' : 'var(--color-background-primary)',
         border: `${borderWidth}px solid ${borderColor}`,
         borderRadius: 8,
         minWidth: 140,
         maxWidth: 220,
-        boxShadow: selected ? '0 0 0 1px rgba(55,138,221,0.3)' : undefined,
+        boxShadow: selected ? '0 0 0 1.5px #378ADD' : undefined,
         opacity: d.disabled ? 0.45 : 1,
         position: 'relative',
       }}
@@ -182,4 +182,4 @@ function FlowNodeComponent({ data, selected, id: nodeId }: NodeProps) {
   );
 }
 
-export default memo(FlowNodeComponent);
+export default FlowNodeComponent;
