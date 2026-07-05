@@ -10,10 +10,12 @@ import type {
   HistoryEntry,
   ParamValue,
   FlowNodeData,
+  TabData,
 } from '../types';
 import { builtinNodeDefinitions } from '../data/builtinNodes';
 
 interface EditorStore {
+  // ── Active document state ──
   filePath: string | null;
   isDirty: boolean;
   flowType: FlowType | null;
@@ -28,6 +30,21 @@ interface EditorStore {
   history: HistoryEntry[];
   historyIndex: number;
 
+  // ── Tab system ──
+  tabs: TabData[];
+  activeTabId: string | null;
+
+  // ── Tab operations ──
+  /** Create a new tab and switch to it, or switch to existing tab if file already open */
+  openTab: (input: Omit<TabData, 'id' | 'history' | 'historyIndex' | 'isDirty' | 'viewport' | 'nodeDefinitions'> & { id?: string }) => string;
+  /** Close a tab and switch to another */
+  closeTab: (id: string) => void;
+  /** Switch to an existing tab */
+  switchTab: (id: string) => void;
+  /** Update tab title (e.g., after Save As) */
+  updateTabTitle: (id: string, title: string, filePath: string | null) => void;
+
+  // ── Document state operations ──
   setFilePath: (path: string | null) => void;
   setDirty: (dirty: boolean) => void;
   setFlowType: (ft: FlowType) => void;
@@ -42,6 +59,7 @@ interface EditorStore {
 
   addParameter: (param: FlowParameter) => void;
   removeParameter: (key: string) => void;
+  updateParameter: (key: string, patch: Partial<FlowParameter>) => void;
 
   setSelection: (nodeIds: string[], edgeIds: string[]) => void;
   setViewport: (viewport: { x: number; y: number; zoom: number }) => void;
@@ -56,10 +74,11 @@ interface EditorStore {
   setValidationResult: (result: ValidationResult | null) => void;
 }
 
+// ── Helpers ──
+
 function filterDefinitions(flowType: FlowType): NodeDefinition[] {
-  return builtinNodeDefinitions.filter(
-    (d) => d.flowTypes.includes(flowType.id)
-  );
+  if (!flowType.builtin) return builtinNodeDefinitions;
+  return builtinNodeDefinitions.filter((d) => d.flowTypes.length === 0 || d.flowTypes.includes(flowType.id));
 }
 
 function createNode(def: NodeDefinition, position: { x: number; y: number }): FlowNode {
@@ -116,22 +135,257 @@ function restore(store: EditorStore, entry: HistoryEntry) {
   store.parameters = JSON.parse(JSON.stringify(entry.parameters));
 }
 
-export const useEditorStore = create<EditorStore>((set, get) => ({
+// ── Tab helpers ──
+
+function makeTabId(): string {
+  return uuidv4();
+}
+
+/** Save the active tab's current state back into its TabData slot */
+function flushActiveTab(s: EditorStore) {
+  if (!s.activeTabId) return;
+  const idx = s.tabs.findIndex((t) => t.id === s.activeTabId);
+  if (idx < 0) return;
+  s.tabs[idx] = {
+    ...s.tabs[idx],
+    filePath: s.filePath,
+    title: s.filePath
+      ? s.filePath.replace(/^.*[\\/]/, '').replace(/\.flow(\.json)?$/, '')
+      : s.tabs[idx].title,
+    flowType: s.flowType,
+    nodes: s.nodes,
+    edges: s.edges,
+    parameters: s.parameters,
+    history: s.history,
+    historyIndex: s.historyIndex,
+    isDirty: s.isDirty,
+    nodeDefinitions: s.nodeDefinitions,
+    viewport: s.viewport,
+  };
+}
+
+/** Load a tab's saved state into the active document fields */
+function loadTabIntoStore(s: EditorStore, tab: TabData) {
+  s.filePath = tab.filePath;
+  s.isDirty = tab.isDirty;
+  s.flowType = tab.flowType;
+  s.nodes = tab.nodes;
+  s.edges = tab.edges;
+  s.parameters = tab.parameters;
+  s.history = tab.history;
+  s.historyIndex = tab.historyIndex;
+  s.nodeDefinitions = tab.nodeDefinitions;
+  s.viewport = tab.viewport;
+  s.selectedNodeIds = [];
+  s.selectedEdgeIds = [];
+  s.validationResult = null;
+  s.activeTabId = tab.id;
+}
+
+// ── Initial tab (default empty document) ──
+const defaultTabId = makeTabId();
+const defaultTab: TabData = {
+  id: defaultTabId,
   filePath: null,
-  isDirty: false,
+  title: 'Untitled',
   flowType: null,
   nodes: createDefaultNodes(),
   edges: [],
   parameters: [],
-  selectedNodeIds: [],
-  selectedEdgeIds: [],
-  viewport: { x: 0, y: 0, zoom: 1 },
-  nodeDefinitions: builtinNodeDefinitions,
-  validationResult: null,
   history: [],
   historyIndex: -1,
+  isDirty: false,
+  nodeDefinitions: builtinNodeDefinitions,
+  viewport: { x: 0, y: 0, zoom: 1 },
+};
 
-  setFilePath: (path) => set({ filePath: path }),
+// ── Store ──
+
+export const useEditorStore = create<EditorStore>((set, get) => ({
+  // ── Initial state from default tab ──
+  filePath: defaultTab.filePath,
+  isDirty: defaultTab.isDirty,
+  flowType: defaultTab.flowType,
+  nodes: defaultTab.nodes,
+  edges: defaultTab.edges,
+  parameters: defaultTab.parameters,
+  selectedNodeIds: [],
+  selectedEdgeIds: [],
+  viewport: defaultTab.viewport,
+  nodeDefinitions: defaultTab.nodeDefinitions,
+  validationResult: null,
+  history: defaultTab.history,
+  historyIndex: defaultTab.historyIndex,
+
+  tabs: [defaultTab],
+  activeTabId: defaultTabId,
+
+  // ── Tab operations ──
+
+  openTab: (input) => {
+    const s = get();
+    flushActiveTab(s);
+
+    // Check if tab for this file already exists
+    if (input.filePath) {
+      const existing = s.tabs.find((t) => t.filePath === input.filePath);
+      if (existing) {
+        // Switch to existing tab
+        const newTabs = [...s.tabs];
+        const idx = newTabs.findIndex((t) => t.id === existing.id);
+        const tab = newTabs[idx];
+        // Don't flush again since we already did above, just need to check
+        // the existing tab exists. We flush first to save current, then restore.
+        // But wait - we already flushed above. The flush wrote into the current
+        // active tab. Now we need to switch to the existing one.
+        const newState = { ...s, activeTabId: existing.id };
+        loadTabIntoStore(newState, tab);
+        set({
+          tabs: newTabs,
+          activeTabId: existing.id,
+          filePath: newState.filePath,
+          isDirty: newState.isDirty,
+          flowType: newState.flowType,
+          nodes: newState.nodes,
+          edges: newState.edges,
+          parameters: newState.parameters,
+          history: newState.history,
+          historyIndex: newState.historyIndex,
+          nodeDefinitions: newState.nodeDefinitions,
+          viewport: newState.viewport,
+          selectedNodeIds: [],
+          selectedEdgeIds: [],
+          validationResult: null,
+        });
+        return existing.id;
+      }
+    }
+
+    // Create new tab
+    const id = input.id ?? makeTabId();
+    const tab: TabData = {
+      id,
+      filePath: input.filePath,
+      title: input.title,
+      flowType: input.flowType,
+      nodes: input.nodes,
+      edges: input.edges,
+      parameters: input.parameters,
+      history: [],
+      historyIndex: -1,
+      isDirty: false,
+      nodeDefinitions: input.flowType ? filterDefinitions(input.flowType) : builtinNodeDefinitions,
+      viewport: { x: 0, y: 0, zoom: 1 },
+    };
+
+    const newState = { ...s, tabs: [...s.tabs, tab], activeTabId: id };
+    loadTabIntoStore(newState, tab);
+    set({
+      tabs: newState.tabs,
+      activeTabId: id,
+      filePath: newState.filePath,
+      isDirty: newState.isDirty,
+      flowType: newState.flowType,
+      nodes: newState.nodes,
+      edges: newState.edges,
+      parameters: newState.parameters,
+      history: newState.history,
+      historyIndex: newState.historyIndex,
+      nodeDefinitions: newState.nodeDefinitions,
+      viewport: newState.viewport,
+      selectedNodeIds: [],
+      selectedEdgeIds: [],
+      validationResult: null,
+    });
+    return id;
+  },
+
+  closeTab: (id) => {
+    const s = get();
+    if (s.tabs.length <= 1) return; // Keep at least one tab
+
+    const newTabs = s.tabs.filter((t) => t.id !== id);
+    const newState = { ...s, tabs: newTabs };
+
+    if (s.activeTabId === id) {
+      // Switch to the tab after the closed one, or the last one
+      const closedIdx = s.tabs.findIndex((t) => t.id === id);
+      const newIdx = Math.min(closedIdx, newTabs.length - 1);
+      const targetTab = newTabs[newIdx];
+      newState.activeTabId = targetTab.id;
+      loadTabIntoStore(newState, targetTab);
+    }
+
+    set({
+      tabs: newTabs,
+      activeTabId: newState.activeTabId,
+      filePath: newState.filePath,
+      isDirty: newState.isDirty,
+      flowType: newState.flowType,
+      nodes: newState.nodes,
+      edges: newState.edges,
+      parameters: newState.parameters,
+      history: newState.history,
+      historyIndex: newState.historyIndex,
+      nodeDefinitions: newState.nodeDefinitions,
+      viewport: newState.viewport,
+      selectedNodeIds: [],
+      selectedEdgeIds: [],
+      validationResult: null,
+    });
+  },
+
+  switchTab: (id) => {
+    const s = get();
+    if (s.activeTabId === id) return;
+    flushActiveTab(s);
+
+    const tab = s.tabs.find((t) => t.id === id);
+    if (!tab) return;
+
+    const newState = { ...s, activeTabId: id };
+    loadTabIntoStore(newState, tab);
+    set({
+      activeTabId: id,
+      filePath: newState.filePath,
+      isDirty: newState.isDirty,
+      flowType: newState.flowType,
+      nodes: newState.nodes,
+      edges: newState.edges,
+      parameters: newState.parameters,
+      history: newState.history,
+      historyIndex: newState.historyIndex,
+      nodeDefinitions: newState.nodeDefinitions,
+      viewport: newState.viewport,
+      selectedNodeIds: [],
+      selectedEdgeIds: [],
+      validationResult: null,
+    });
+  },
+
+  updateTabTitle: (id, title, filePath) => {
+    set((s) => ({
+      tabs: s.tabs.map((t) =>
+        t.id === id ? { ...t, title, filePath } : t
+      ),
+    }));
+  },
+
+  // ── Document state operations ──
+
+  setFilePath: (path) => {
+    set((s) => {
+      // Also update tab title
+      const title = path ? path.replace(/^.*[\\/]/, '').replace(/\.flow(\.json)?$/, '') : s.tabs.find(t => t.id === s.activeTabId)?.title ?? 'Untitled';
+      return {
+        filePath: path,
+        tabs: s.tabs.map((t) =>
+          t.id === s.activeTabId ? { ...t, filePath: path, title } : t
+        ),
+      };
+    });
+  },
+
   setDirty: (dirty) => set({ isDirty: dirty }),
 
   setFlowType: (ft) =>
@@ -227,6 +481,15 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
         isDirty: true,
       };
     });
+  },
+
+  updateParameter: (key, patch) => {
+    set((s) => ({
+      parameters: s.parameters.map((p) =>
+        p.key === key ? { ...p, ...patch } : p
+      ),
+      isDirty: true,
+    }));
   },
 
   setSelection: (nodeIds, edgeIds) =>

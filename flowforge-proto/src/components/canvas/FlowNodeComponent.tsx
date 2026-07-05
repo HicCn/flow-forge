@@ -1,17 +1,25 @@
 import { memo } from 'react';
 import { Handle, Position, type NodeProps } from '@xyflow/react';
 import type { FlowNodeData } from '../../types';
+import { useConfigStore } from '../../store/configStore';
 import { useT } from '../../i18n';
 
 function FlowNodeComponent({ data, selected }: NodeProps) {
   const { t } = useT();
   const d = data as unknown as FlowNodeData;
-  const hasInput = d.nodeType !== 'flow_start';
-  const hasOutput = d.nodeType !== 'flow_end';
+  // Subscribe to customNodeDefs for reactivity when definitions are edited,
+  // then call getNodeDefs() (stable function ref) to get merged builtin+custom.
+  const customNodeDefs = useConfigStore((s) => s.customNodeDefs);
+  const getNodeDefs = useConfigStore((s) => s.getNodeDefs);
+  const def = getNodeDefs().find((nd) => nd.type === d.nodeType);
+  const pins = def?.pins ?? { inputs: [], outputs: [] };
 
   const isError = d.validationErrors.length > 0;
   const borderColor = isError ? '#E24B4A' : selected ? '#378ADD' : d.color;
   const borderWidth = selected || isError ? 2 : 1;
+
+  const inputCount = pins.inputs.length;
+  const outputCount = pins.outputs.length;
 
   return (
     <div
@@ -25,19 +33,24 @@ function FlowNodeComponent({ data, selected }: NodeProps) {
         opacity: d.disabled ? 0.45 : 1,
       }}
     >
-      {hasInput && (
-        <Handle
-          type="target"
-          position={Position.Left}
-          id="flow_in"
-          style={{
-            background: '#888780',
-            width: 8,
-            height: 8,
-            border: 'none',
-          }}
-        />
-      )}
+      {pins.inputs.map((pin, i) => {
+        // Compact bottom-up: pin 0 at the bottom, tightly packed upward
+        const topPct = inputCount === 1 ? 50 : 85 - (i * 14);
+        return (
+          <Handle
+            key={pin.id}
+            type="target"
+            position={Position.Left}
+            id={pin.id}
+            style={{
+              background: '#888780',
+              width: 8, height: 8,
+              border: 'none',
+              top: `${topPct}%`,
+            }}
+          />
+        );
+      })}
 
       <div style={{
         padding: '6px 10px',
@@ -57,7 +70,20 @@ function FlowNodeComponent({ data, selected }: NodeProps) {
       </div>
 
       <div style={{ padding: '4px 10px 6px' }}>
-        {Object.entries(d.params).slice(0, 3).map(([key, val]) => (
+        {/* flow_call node: show target flow file */}
+        {d.nodeType === 'flow_call' && (
+          <div style={{
+            fontSize: 9,
+            color: 'var(--color-text-info)',
+            marginBottom: 2,
+            whiteSpace: 'nowrap',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+          }}>
+            {String(d.params?.target_flow?.value || d.params?.target_flow || '?')}
+          </div>
+        )}
+        {d.nodeType !== 'flow_call' && Object.entries(d.params).slice(0, 3).map(([key, val]) => (
           <div key={key} style={{
             fontSize: 10,
             color: 'var(--color-text-secondary)',
@@ -69,7 +95,7 @@ function FlowNodeComponent({ data, selected }: NodeProps) {
             {key}: {val.source === 'param' ? `$(${val.value})` : String(val.value).slice(0, 20)}
           </div>
         ))}
-        {Object.keys(d.params).length > 3 && (
+        {d.nodeType !== 'flow_call' && Object.keys(d.params).length > 3 && (
           <div style={{ fontSize: 10, color: 'var(--color-text-tertiary)' }}>
             {t('flowNode.more', { count: Object.keys(d.params).length - 3 })}
           </div>
@@ -87,34 +113,24 @@ function FlowNodeComponent({ data, selected }: NodeProps) {
         )}
       </div>
 
-      {hasOutput && (
-        <Handle
-          type="source"
-          position={Position.Right}
-          id="flow_out"
-          style={{
-            background: '#888780',
-            width: 8,
-            height: 8,
-            border: 'none',
-          }}
-        />
-      )}
-
-      {d.nodeType === 'branch_choice' && (
-        <>
-          <Handle type="source" position={Position.Right} id="choice_a" style={{ top: '55%', background: '#888780', width: 7, height: 7, border: 'none' }} />
-          <Handle type="source" position={Position.Right} id="choice_b" style={{ top: '70%', background: '#888780', width: 7, height: 7, border: 'none' }} />
-          <Handle type="source" position={Position.Right} id="choice_c" style={{ top: '85%', background: '#888780', width: 7, height: 7, border: 'none' }} />
-        </>
-      )}
-
-      {d.nodeType === 'condition' && (
-        <>
-          <Handle type="source" position={Position.Right} id="flow_true" style={{ top: '55%', background: '#639922', width: 7, height: 7, border: 'none' }} />
-          <Handle type="source" position={Position.Right} id="flow_false" style={{ top: '75%', background: '#E24B4A', width: 7, height: 7, border: 'none' }} />
-        </>
-      )}
+      {pins.outputs.map((pin, i) => {
+        // Compact bottom-up: pin 0 at the bottom, tightly packed upward
+        const topPct = outputCount === 1 ? 50 : 85 - (i * 14);
+        return (
+          <Handle
+            key={pin.id}
+            type="source"
+            position={Position.Right}
+            id={pin.id}
+            style={{
+              background: '#888780',
+              width: 8, height: 8,
+              border: 'none',
+              top: `${topPct}%`,
+            }}
+          />
+        );
+      })}
     </div>
   );
 }

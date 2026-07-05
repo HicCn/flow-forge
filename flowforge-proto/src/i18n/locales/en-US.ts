@@ -33,6 +33,7 @@ export const enUS: typeof zhCN = {
     new: 'New',
     save: 'Save',
     saveAs: 'Save As',
+    export: 'Export Code',
     undo: 'Undo (Ctrl+Z)',
     redo: 'Redo (Ctrl+Y)',
     nodeCount: '{count} nodes',
@@ -44,6 +45,7 @@ export const enUS: typeof zhCN = {
     search: 'Search nodes...',
     collapse: 'Collapse',
     noNodes: 'No nodes found',
+    manageTypes: 'Manage Node Types',
   },
 
   propertyPanel: {
@@ -59,6 +61,11 @@ export const enUS: typeof zhCN = {
     fixed: 'Fixed',
     param: 'Param',
     selectParam: '-- select param --',
+    targetInterface: 'Target flow inputs',
+    openTargetFlow: 'Open target flow',
+    loading: 'Loading...',
+    noInputParams: 'No input params in target',
+    enterValue: 'Enter value',
   },
 
   parametersPanel: {
@@ -71,6 +78,13 @@ export const enUS: typeof zhCN = {
     ok: 'OK',
     remove: 'Remove',
     noParams: 'No parameters',
+    markAsInput: 'Mark as callable input',
+  },
+
+  tabs: {
+    close: 'Close',
+    closeOthers: 'Close Others',
+    closeAll: 'Close All',
   },
 
   statusBar: {

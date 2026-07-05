@@ -30,6 +30,7 @@ export const zhCN = {
     new: '新建',
     save: '保存',
     saveAs: '另存为',
+    export: '导出代码',
     undo: '撤销 (Ctrl+Z)',
     redo: '重做 (Ctrl+Y)',
     nodeCount: '{count} 个节点',
@@ -41,6 +42,7 @@ export const zhCN = {
     search: '搜索节点...',
     collapse: '收起',
     noNodes: '无匹配节点',
+    manageTypes: '管理节点类型',
   },
 
   propertyPanel: {
@@ -56,6 +58,11 @@ export const zhCN = {
     fixed: '固定值',
     param: '参数引用',
     selectParam: '-- 选择参数 --',
+    targetInterface: '目标流入参',
+    openTargetFlow: '打开目标流',
+    loading: '加载中...',
+    noInputParams: '目标流无入参',
+    enterValue: '输入值',
   },
 
   parametersPanel: {
@@ -68,6 +75,13 @@ export const zhCN = {
     ok: '确定',
     remove: '移除',
     noParams: '暂无参数',
+    markAsInput: '标记为外部调用入参',
+  },
+
+  tabs: {
+    close: '关闭',
+    closeOthers: '关闭其他',
+    closeAll: '关闭所有',
   },
 
   statusBar: {

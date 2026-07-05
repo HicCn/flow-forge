@@ -1,6 +1,7 @@
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
+const os = require('os');
 const { execSync } = require('child_process');
 
 const PORT = 3001;
@@ -63,6 +64,51 @@ const server = http.createServer(async (req, res) => {
     } else if (req.method === 'GET' && req.url === '/api/list-samples') {
       const files = fs.readdirSync(PROJECT_DIR).filter((f) => f.endsWith('.flow'));
       sendJson(res, 200, { files });
+    } else if (req.method === 'POST' && req.url === '/api/load') {
+      const { path: filePath } = await readJsonBody(req);
+      if (filePath && fs.existsSync(filePath)) {
+        const content = fs.readFileSync(filePath, 'utf-8');
+        sendJson(res, 200, { content });
+      } else {
+        sendJson(res, 200, { content: null });
+      }
+    } else if (req.method === 'POST' && req.url === '/api/export-runtime') {
+      const { lang, nodeDefs, flowData } = await readJsonBody(req);
+
+      // Write defs to temp file
+      const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'flowforge-export-'));
+      const defsPath = path.join(tmpDir, 'defs.json');
+      fs.writeFileSync(defsPath, JSON.stringify(nodeDefs ?? []), 'utf-8');
+
+      // Determine output dir
+      const outDir = path.join(tmpDir, 'out');
+      fs.mkdirSync(outDir, { recursive: true });
+
+      // Run the CLI generator
+      const cliPath = path.resolve(__dirname, '..', 'cli', 'generate.cjs');
+      const langArg = lang === 'typescript' ? 'typescript' : 'csharp';
+      try {
+        const cmd = `node "${cliPath}" --lang ${langArg} --defs "${defsPath}" --out "${outDir}"`;
+        execSync(cmd, { encoding: 'utf-8', timeout: 10000 });
+
+        // Read generated files
+        const files = [];
+        if (fs.existsSync(outDir)) {
+          for (const f of fs.readdirSync(outDir)) {
+            files.push({
+              name: f,
+              content: fs.readFileSync(path.join(outDir, f), 'utf-8'),
+            });
+          }
+        }
+
+        // Cleanup
+        fs.rmSync(tmpDir, { recursive: true, force: true });
+        sendJson(res, 200, { files });
+      } catch (err) {
+        fs.rmSync(tmpDir, { recursive: true, force: true });
+        sendJson(res, 500, { error: err.message || String(err) });
+      }
     } else {
       sendJson(res, 404, { error: 'Not found' });
     }

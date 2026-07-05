@@ -29,8 +29,14 @@ async function ensureTauri() {
   return false;
 }
 
-function isTauri(): boolean {
+export function isTauri(): boolean {
   return typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
+}
+
+function getConfigDir(): string | null {
+  try {
+    return localStorage.getItem('flowforge_config_dir') || localStorage.getItem('flowforge_work_dir') || null;
+  } catch { return null; }
 }
 
 // ── Browser fallback (for dev mode without Tauri) ──
@@ -60,8 +66,9 @@ export async function saveFile(path: string, content: string): Promise<void> {
 /** Save workflow content via "Save As" dialog, returns chosen path or null if cancelled */
 export async function saveFileAs(content: string, defaultName = 'untitled.flow'): Promise<string | null> {
   if (await ensureTauri()) {
+    const dir = getConfigDir();
     const filePath = await tauriDialog!.save({
-      defaultPath: defaultName,
+      defaultPath: dir ? `${dir}/${defaultName}` : defaultName,
       filters: [{ name: 'FlowForge Workflow', extensions: ['flow'] }],
     });
     if (!filePath) return null;
@@ -76,9 +83,11 @@ export async function saveFileAs(content: string, defaultName = 'untitled.flow')
 /** Open a workflow file via dialog, returns content + path or null if cancelled */
 export async function openFile(): Promise<{ content: string; path: string } | null> {
   if (await ensureTauri()) {
+    const dir = getConfigDir();
     const selected = await tauriDialog!.open({
       filters: [{ name: 'FlowForge Workflow', extensions: ['flow', 'json'] }],
       multiple: false,
+      ...(dir ? { defaultPath: dir } : {}),
     });
     if (!selected) return null;
     const path = typeof selected === 'string' ? selected : selected[0];
@@ -104,9 +113,6 @@ export async function loadSample(): Promise<{ content: string; path: string } | 
   }
 }
 
-/** Check if running inside Tauri desktop shell */
-export { isTauri };
-
 /** Load a file directly by path (for recent file re-opening) */
 export async function loadFile(path: string): Promise<{ content: string; path: string } | null> {
   if (await ensureTauri()) {
@@ -117,4 +123,9 @@ export async function loadFile(path: string): Promise<{ content: string; path: s
     if (!res.content) return null;
     return { content: res.content, path };
   }
+}
+
+/** Export generated runtime code — sends node definitions and flow data to server for generation */
+export async function exportRuntime(lang: 'csharp' | 'typescript', nodeDefs: unknown[], flowData?: unknown): Promise<{ files: { name: string; content: string }[] }> {
+  return browserFetch(`${SERVER_URL}/api/export-runtime`, { lang, nodeDefs, flowData });
 }

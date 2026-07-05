@@ -12,6 +12,7 @@ export default function ParametersPanel() {
   const parameters = useEditorStore((s) => s.parameters);
   const addParameter = useEditorStore((s) => s.addParameter);
   const removeParameter = useEditorStore((s) => s.removeParameter);
+  const updateParameter = useEditorStore((s) => s.updateParameter);
   const [collapsed, setCollapsed] = useState(false);
   const [adding, setAdding] = useState(false);
   const [newKey, setNewKey] = useState('');
@@ -157,20 +158,36 @@ export default function ParametersPanel() {
             justifyContent: 'space-between',
             padding: '2px 0',
             fontSize: 11,
-            gap: 6,
+            gap: 4,
           }}
         >
+          <label
+            title={t('parametersPanel.markAsInput')}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              cursor: 'pointer',
+              flexShrink: 0,
+            }}
+          >
+            <input
+              type="checkbox"
+              checked={p.isInput ?? false}
+              onChange={(e) => updateParameter(p.key, { isInput: e.target.checked })}
+              style={{ width: 10, height: 10, margin: 0, cursor: 'pointer' }}
+            />
+          </label>
           <div style={{ display: 'flex', alignItems: 'center', gap: 4, flex: 1, overflow: 'hidden' }}>
             <span style={{
               fontSize: 9,
-              background: 'var(--color-background-info)',
-              color: 'var(--color-text-info)',
+              background: p.isInput ? 'var(--color-background-warning)' : 'var(--color-background-info)',
+              color: p.isInput ? 'var(--color-text-warning)' : 'var(--color-text-info)',
               padding: '0 3px',
               borderRadius: 2,
               fontWeight: 500,
               flexShrink: 0,
             }}>
-              {typeLabel[p.type] ?? p.type}
+              {p.isInput ? 'in' : typeLabel[p.type] ?? p.type}
             </span>
             <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
               {p.key}

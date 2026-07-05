@@ -7,10 +7,13 @@ import PropertyPanel from '../panels/PropertyPanel';
 import StatusBar from '../panels/StatusBar';
 import { useEditorStore } from '../../store/editorStore';
 import { useAppStore } from '../../store/appStore';
-import { saveFile, saveFileAs } from '../../api/fileApi';
-import { useEffect } from 'react';
+import { saveFile, saveFileAs, exportRuntime } from '../../api/fileApi';
+import { useConfigStore } from '../../store/configStore';
+import { useEffect, useState } from 'react';
+import { useT } from '../../i18n';
 
 export default function AppShell() {
+  const { t } = useT();
   const setFilePath = useEditorStore((s) => s.setFilePath);
   const setDirty = useEditorStore((s) => s.setDirty);
   const undo = useEditorStore((s) => s.undo);
@@ -21,6 +24,11 @@ export default function AppShell() {
   const filePath = useEditorStore((s) => s.filePath);
   const flowType = useEditorStore((s) => s.flowType);
   const clearCanvas = useEditorStore((s) => s.clearCanvas);
+  const tabs = useEditorStore((s) => s.tabs);
+  const activeTabId = useEditorStore((s) => s.activeTabId);
+  const switchTab = useEditorStore((s) => s.switchTab);
+  const closeTab = useEditorStore((s) => s.closeTab);
+  const updateTabTitle = useEditorStore((s) => s.updateTabTitle);
   const addRecentFile = useAppStore((s) => s.addRecentFile);
 
   // ── Serialize current state to FlowDocument JSON ──
@@ -40,7 +48,18 @@ export default function AppShell() {
           dsl_version: '1.0',
           flow_type: flowType?.id ?? '',
         },
-        parameters,
+        parameters: parameters.map((p) => {
+          const result: Record<string, unknown> = {
+            key: p.key,
+            type: p.type,
+            default: p.default,
+            source: p.source,
+          };
+          if (p.isInput) result.isInput = true;
+          if (p.nodeId) result.nodeId = p.nodeId;
+          if (p.expression) result.expression = p.expression;
+          return result;
+        }),
         nodes: nodes.map((n) => ({
           id: n.id,
           type: n.data.nodeType,
@@ -105,6 +124,22 @@ export default function AppShell() {
     setFilePath(null);
   };
 
+  const [exporting, setExporting] = useState(false);
+  const handleExport = async () => {
+    setExporting(true);
+    try {
+      const nodeDefs = useConfigStore.getState().getNodeDefs();
+      const result = await exportRuntime('csharp', nodeDefs);
+      // TODO: save files to scriptDir, or show download UI
+      console.log('Export result:', result);
+      alert(`导出了 ${result.files.length} 个文件`);
+    } catch (err) {
+      console.error('Export failed:', err);
+    } finally {
+      setExporting(false);
+    }
+  };
+
   // ── Keyboard shortcuts ──
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -151,7 +186,73 @@ export default function AppShell() {
           onSave={handleSave}
           onSaveAs={handleSaveAs}
           onNew={handleNew}
+          onExport={handleExport}
         />
+        {/* ── Tab Bar ── */}
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          height: 30,
+          background: 'var(--color-background-secondary)',
+          borderBottom: '0.5px solid var(--color-border-tertiary)',
+          overflowX: 'auto',
+          flexShrink: 0,
+          gap: 1,
+          padding: '0 4px',
+        }}>
+          {tabs.map((tab) => {
+            const isActive = tab.id === activeTabId;
+            return (
+              <div
+                key={tab.id}
+                onClick={() => switchTab(tab.id)}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 4,
+                  padding: '2px 8px',
+                  fontSize: 11,
+                  cursor: 'pointer',
+                  borderRadius: '4px 4px 0 0',
+                  whiteSpace: 'nowrap',
+                  maxWidth: 160,
+                  background: isActive ? 'var(--color-background-primary)' : 'transparent',
+                  border: isActive ? '0.5px solid var(--color-border-tertiary)' : '0.5px solid transparent',
+                  borderBottom: isActive ? 'none' : '0.5px solid transparent',
+                  color: isActive ? 'var(--color-text-primary)' : 'var(--color-text-tertiary)',
+                  fontWeight: isActive ? 500 : 400,
+                  position: 'relative' as const,
+                  top: isActive ? 0.5 : 0,
+                }}
+                title={tab.filePath ?? tab.title}
+              >
+                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  {tab.title}
+                  {tab.isDirty && <span style={{ color: 'var(--color-text-warning)', marginLeft: 2 }}> *</span>}
+                </span>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    closeTab(tab.id);
+                  }}
+                  style={{
+                    border: 'none',
+                    background: 'transparent',
+                    cursor: 'pointer',
+                    fontSize: 10,
+                    color: 'var(--color-text-tertiary)',
+                    padding: 0,
+                    lineHeight: 1,
+                    flexShrink: 0,
+                  }}
+                  title={t('tabs.close')}
+                >
+                  ×
+                </button>
+              </div>
+            );
+          })}
+        </div>
         <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
           <NodeLibrary />
           <div style={{ flex: 1, position: 'relative' }}>

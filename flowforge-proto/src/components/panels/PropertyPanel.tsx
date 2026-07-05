@@ -1,6 +1,8 @@
 import { useEditorStore } from '../../store/editorStore';
 import type { ParamValue, ParamDefinition, FlowParameter } from '../../types';
 import { useT } from '../../i18n';
+import { useState, useEffect, useCallback } from 'react';
+import { loadFile } from '../../api/fileApi';
 
 export default function PropertyPanel() {
   const { t } = useT();
@@ -9,7 +11,52 @@ export default function PropertyPanel() {
   const parameters = useEditorStore((s) => s.parameters);
   const nodeDefinitions = useEditorStore((s) => s.nodeDefinitions);
   const updateNodeParam = useEditorStore((s) => s.updateNodeParam);
+  const tabs = useEditorStore((s) => s.tabs);
+  const openTab = useEditorStore((s) => s.openTab);
+  const switchTab = useEditorStore((s) => s.switchTab);
   const [collapsed, setCollapsed] = useState(false);
+  const [flowInterface, setFlowInterface] = useState<FlowParameter[] | null>(null);
+  const [interfaceLoading, setInterfaceLoading] = useState(false);
+
+  const resolveFlowInterface = useCallback(async (path: string) => {
+    if (!path) { setFlowInterface(null); return; }
+    setInterfaceLoading(true);
+    try {
+      const existingTab = tabs.find((tb) => tb.filePath === path);
+      if (existingTab) {
+        const inputs = existingTab.parameters.filter((p) => p.isInput);
+        setFlowInterface(inputs);
+        setInterfaceLoading(false);
+        return;
+      }
+      const result = await loadFile(path);
+      if (result?.content) {
+        const doc = JSON.parse(result.content);
+        const inputs = (doc.parameters as FlowParameter[]).filter((p) => p.isInput);
+        setFlowInterface(inputs);
+      } else {
+        setFlowInterface(null);
+      }
+    } catch {
+      setFlowInterface(null);
+    } finally {
+      setInterfaceLoading(false);
+    }
+  }, [tabs]);
+
+  // Resolve target flow interface params when selection changes
+  useEffect(() => {
+    if (selectedNodeIds.length === 1) {
+      const n = nodes.find((nd) => nd.id === selectedNodeIds[0]);
+      const isFC = n?.data?.nodeType === 'flow_call';
+      const tf = isFC ? String(n?.data?.params?.target_flow?.value ?? '') : '';
+      if (isFC && tf) {
+        resolveFlowInterface(tf);
+        return;
+      }
+    }
+    setFlowInterface(null);
+  }, [selectedNodeIds, nodes, resolveFlowInterface]);
 
   if (collapsed) {
     return (
@@ -65,6 +112,8 @@ export default function PropertyPanel() {
 
   const def = nodeDefinitions.find((d) => d.type === node.data.nodeType);
   const params = def?.params ?? [];
+  const isFlowCall = node.data.nodeType === 'flow_call';
+  const targetFlow = isFlowCall ? String(node.data.params?.target_flow?.value ?? '') : '';
 
   return (
     <div style={{
@@ -105,7 +154,112 @@ export default function PropertyPanel() {
             onChange={(val) => updateNodeParam(node.id, p.key, val)}
           />
         ))}
-        {params.length === 0 && (
+
+        {/* ── flow_call: interface params from target flow ── */}
+        {isFlowCall && (
+          <div style={{ borderTop: '0.5px solid var(--color-border-tertiary)', marginTop: 4, paddingTop: 6 }}>
+            <div style={{ fontSize: 10, fontWeight: 500, color: 'var(--color-text-secondary)', marginBottom: 4 }}>
+              {t('propertyPanel.targetInterface')}
+            </div>
+            {targetFlow && (
+              <button
+                onClick={async () => {
+                  // Try existing tab first
+                  const existingTab = tabs.find((tb) => tb.filePath === targetFlow);
+                  if (existingTab) {
+                    switchTab(existingTab.id);
+                  } else {
+                  try {
+                    const result = await loadFile(targetFlow);
+                    if (result?.content) {
+                      const doc = JSON.parse(result.content);
+                      const parsedParams: FlowParameter[] = (doc.parameters || []).map((p: Record<string, unknown>) => ({
+                        key: String(p.key ?? ''),
+                        type: (p.type as FlowParameter['type']) || 'string',
+                        default: p.default ?? '',
+                        source: (p.source as FlowParameter['source']) || 'flow_input',
+                        isInput: Boolean(p.isInput),
+                      }));
+                      const parsedNodes = (doc.nodes as Array<Record<string, unknown>> || []).map((n) => ({
+                        id: String(n.id ?? crypto.randomUUID()),
+                        type: 'flowNode' as const,
+                        position: { x: Number((n.position as Record<string, number>)?.x ?? 0), y: Number((n.position as Record<string, number>)?.y ?? 0) },
+                        data: {
+                          nodeType: String(n.type ?? ''),
+                          label: String(n.type ?? ''),
+                          category: '',
+                          color: '#888',
+                          params: (n.params as Record<string, ParamValue>) || {},
+                          disabled: Boolean(n.disabled),
+                          validationErrors: [],
+                        },
+                      }));
+                      openTab({
+                        filePath: targetFlow,
+                        title: targetFlow.replace(/^.*[\\/]/, '').replace(/\.flow(\.json)?$/, ''),
+                        flowType: null,
+                        nodes: parsedNodes.length > 0 ? parsedNodes : [],
+                        edges: [],
+                        parameters: parsedParams,
+                      });
+                    }
+                  } catch { /* file not found */ }
+                  }
+                }}
+                style={{
+                  width: '100%', fontSize: 10, padding: '3px 6px', marginBottom: 6,
+                  border: '0.5px solid var(--color-border-info)', borderRadius: 4,
+                  background: 'transparent', cursor: 'pointer',
+                  color: 'var(--color-text-info)',
+                }}
+              >
+                {t('propertyPanel.openTargetFlow')}
+              </button>
+            )}
+            {interfaceLoading && (
+              <div style={{ fontSize: 10, color: 'var(--color-text-tertiary)' }}>{t('propertyPanel.loading')}</div>
+            )}
+            {!interfaceLoading && flowInterface && flowInterface.length > 0 && (
+              flowInterface.map((fp) => {
+                const currentVal = node.data.params[fp.key];
+                return (
+                  <div key={fp.key} style={{ marginBottom: 6 }}>
+                    <label style={{ fontSize: 10, fontWeight: 500, color: 'var(--color-text-secondary)', display: 'block', marginBottom: 2 }}>
+                      {fp.key}
+                      <span style={{ fontSize: 9, color: 'var(--color-text-warning)', marginLeft: 4 }}>in</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={currentVal ? String(currentVal.value ?? '') : String(fp.default ?? '')}
+                      onChange={(e) => {
+                        const newVal: ParamValue = currentVal && currentVal.source === 'param'
+                          ? { source: 'fixed', value: e.target.value }
+                          : { source: 'fixed', value: e.target.value };
+                        updateNodeParam(node.id, fp.key, newVal);
+                      }}
+                      placeholder={t('propertyPanel.enterValue')}
+                      style={{
+                        width: '100%', fontSize: 11, padding: '3px 4px',
+                        border: '0.5px solid var(--color-border-tertiary)',
+                        borderRadius: 4, background: 'var(--color-background-secondary)',
+                        color: 'var(--color-text-primary)', outline: 'none',
+                        boxSizing: 'border-box',
+                      }}
+                    />
+                    <div style={{ fontSize: 9, color: 'var(--color-text-tertiary)' }}>{fp.type}</div>
+                  </div>
+                );
+              })
+            )}
+            {!interfaceLoading && flowInterface !== null && flowInterface.length === 0 && (
+              <div style={{ fontSize: 10, color: 'var(--color-text-tertiary)' }}>
+                {t('propertyPanel.noInputParams')}
+              </div>
+            )}
+          </div>
+        )}
+
+        {params.length === 0 && !isFlowCall && (
           <div style={{ fontSize: 11, color: 'var(--color-text-tertiary)', textAlign: 'center', padding: 8 }}>
             {t('propertyPanel.noParams')}
           </div>
@@ -130,8 +284,6 @@ export default function PropertyPanel() {
   );
 }
 
-import { useState } from 'react';
-
 function ParamEditor({
   paramDef,
   value,
@@ -154,32 +306,30 @@ function ParamEditor({
         {paramDef.required && <span style={{ color: '#E24B4A' }}> *</span>}
       </label>
 
-      {paramDef.source === 'param_or_fixed' && (
-        <div style={{ display: 'flex', gap: 3, marginBottom: 3 }}>
-          <button
-            onClick={() => onChange({ source: 'fixed', value: paramDef.default })}
-            style={{
-              flex: 1, fontSize: 9, padding: '1px 4px',
-              border: `0.5px solid ${isFixed ? 'var(--color-border-info)' : 'var(--color-border-tertiary)'}`,
-              borderRadius: 3, background: isFixed ? 'var(--color-background-info)' : 'transparent',
-              cursor: 'pointer', color: isFixed ? 'var(--color-text-info)' : 'var(--color-text-tertiary)',
-            }}
-          >
-            {t('propertyPanel.fixed')}
-          </button>
-          <button
-            onClick={() => onChange({ source: 'param', value: compatibleParams[0]?.key ?? '' })}
-            style={{
-              flex: 1, fontSize: 9, padding: '1px 4px',
-              border: `0.5px solid ${!isFixed ? 'var(--color-border-info)' : 'var(--color-border-tertiary)'}`,
-              borderRadius: 3, background: !isFixed ? 'var(--color-background-info)' : 'transparent',
-              cursor: 'pointer', color: !isFixed ? 'var(--color-text-info)' : 'var(--color-text-tertiary)',
-            }}
-          >
-            {t('propertyPanel.param')}
-          </button>
-        </div>
-      )}
+      <div style={{ display: 'flex', gap: 3, marginBottom: 3 }}>
+        <button
+          onClick={() => onChange({ source: 'fixed', value: paramDef.default })}
+          style={{
+            flex: 1, fontSize: 9, padding: '1px 4px',
+            border: `0.5px solid ${isFixed ? 'var(--color-border-info)' : 'var(--color-border-tertiary)'}`,
+            borderRadius: 3, background: isFixed ? 'var(--color-background-info)' : 'transparent',
+            cursor: 'pointer', color: isFixed ? 'var(--color-text-info)' : 'var(--color-text-tertiary)',
+          }}
+        >
+          {t('propertyPanel.fixed')}
+        </button>
+        <button
+          onClick={() => onChange({ source: 'param', value: compatibleParams[0]?.key ?? '' })}
+          style={{
+            flex: 1, fontSize: 9, padding: '1px 4px',
+            border: `0.5px solid ${!isFixed ? 'var(--color-border-info)' : 'var(--color-border-tertiary)'}`,
+            borderRadius: 3, background: !isFixed ? 'var(--color-background-info)' : 'transparent',
+            cursor: 'pointer', color: !isFixed ? 'var(--color-text-info)' : 'var(--color-text-tertiary)',
+          }}
+        >
+          {t('propertyPanel.param')}
+        </button>
+      </div>
 
       {isFixed ? (
         renderFixedInput(paramDef, value.value, t, (v) => onChange({ source: 'fixed', value: v }))

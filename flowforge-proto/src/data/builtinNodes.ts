@@ -14,7 +14,7 @@ export const builtinNodeDefinitions: NodeDefinition[] = [
       ],
     },
     params: [],
-    flowTypes: ['dialogue', 'quest', 'action'],
+    flowTypes: [],
   },
   {
     type: 'flow_end',
@@ -29,7 +29,7 @@ export const builtinNodeDefinitions: NodeDefinition[] = [
       outputs: [],
     },
     params: [],
-    flowTypes: ['dialogue', 'quest', 'action'],
+    flowTypes: [],
   },
   {
     type: 'dialogue_line',
@@ -123,5 +123,25 @@ export const builtinNodeDefinitions: NodeDefinition[] = [
       { key: 'payload', type: 'string', label: 'Payload', default: '', required: false, source: 'fixed', placeholder: 'e.g. {"gold": 100}' },
     ],
     flowTypes: ['dialogue', 'quest', 'action'],
+  },
+  {
+    type: 'flow_call',
+    category: 'flow',
+    label: 'Call Flow',
+    description: 'Call another flow and pass parameters to it',
+    color: '#534AB7',
+    icon: 'share-2',
+    pins: {
+      inputs: [
+        { id: 'flow_in', label: '', type: 'flow', required: true },
+      ],
+      outputs: [
+        { id: 'flow_out', label: '', type: 'flow', required: true },
+      ],
+    },
+    params: [
+      { key: 'target_flow', type: 'string', label: 'Target Flow', default: '', required: true, source: 'fixed', placeholder: 'path/to/flow.flow' },
+    ],
+    flowTypes: [],
   },
 ];

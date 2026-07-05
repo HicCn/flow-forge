@@ -93,6 +93,23 @@ export interface FlowParameter {
   source: FlowSource;
   nodeId?: string;
   expression?: string;
+  /** 标记为外部调用入参。设为 true 后，其他流可通过 flow_call 节点为此参数传值 */
+  isInput?: boolean;
+}
+
+export interface TabData {
+  id: string;
+  filePath: string | null;
+  title: string;
+  flowType: FlowType | null;
+  nodes: FlowNode[];
+  edges: FlowEdge[];
+  parameters: FlowParameter[];
+  history: HistoryEntry[];
+  historyIndex: number;
+  isDirty: boolean;
+  nodeDefinitions: NodeDefinition[];
+  viewport: { x: number; y: number; zoom: number };
 }
 
 export interface ValidationError {

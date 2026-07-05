@@ -2,8 +2,9 @@ import { useState } from 'react';
 import { useAppStore } from '../store/appStore';
 import { useEditorStore } from '../store/editorStore';
 import { useConfigStore } from '../store/configStore';
-import { openFile, loadFile } from '../api/fileApi';
+import { openFile, loadFile, exportRuntime } from '../api/fileApi';
 import TypePickerModal from '../components/modals/TypePickerModal';
+import SettingsModal from '../components/modals/SettingsModal';
 import type { FlowNode, FlowEdge, FlowParameter, ParamValue } from '../types';
 import { useT } from '../i18n';
 
@@ -12,17 +13,30 @@ export default function LandingScreen() {
   const recentFiles = useAppStore((s) => s.recentFiles);
   const addRecentFile = useAppStore((s) => s.addRecentFile);
   const setScreen = useAppStore((s) => s.setScreen);
-  const setFlowType = useEditorStore((s) => s.setFlowType);
-  const loadDocument = useEditorStore((s) => s.loadDocument);
-  const setFilePath = useEditorStore((s) => s.setFilePath);
+  const openTab = useEditorStore((s) => s.openTab);
   const findFlowType = useConfigStore((s) => s.findFlowType);
 
   const [showModal, setShowModal] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
+  const [exporting, setExporting] = useState(false);
+
+  const handleExport = async () => {
+    setExporting(true);
+    try {
+      const nodeDefs = useConfigStore.getState().getNodeDefs();
+      const result = await exportRuntime('csharp', nodeDefs);
+      alert(`导出了 ${result.files.length} 个文件`);
+    } catch (err) {
+      console.error('Export failed:', err);
+    } finally {
+      setExporting(false);
+    }
+  };
 
   const loadDocFromJson = (json: string, path: string): boolean => {
     const doc = JSON.parse(json);
     const flowTypeId = doc.meta?.flow_type;
-    const ft = builtinFlowTypes.find((f) => f.id === flowTypeId);
+    const ft = findFlowType(flowTypeId);
 
     if (!ft) {
       alert(t('landing.unknownFlowType') + ': ' + (flowTypeId || t('landing.unknown')));
@@ -57,12 +71,19 @@ export default function LandingScreen() {
       type: String(p.type) as FlowParameter['type'],
       default: p.default,
       source: (p.source as FlowParameter['source']) || 'flow_input',
+      isInput: Boolean(p.isInput),
     }));
 
-    setFlowType(ft);
-    loadDocument(loadedNodes, loadedEdges, loadedParams);
-    setFilePath(path);
-    addRecentFile(path, doc.meta?.name || t('toolbar.untitled'), ft);
+    const title = path.replace(/^.*[\\/]/, '').replace(/\.flow(\.json)?$/, '') || doc.meta?.name || 'Untitled';
+    openTab({
+      filePath: path,
+      title,
+      flowType: ft,
+      nodes: loadedNodes,
+      edges: loadedEdges,
+      parameters: loadedParams,
+    });
+    addRecentFile(path, title, ft);
     setScreen('editor');
     return true;
   };
@@ -155,7 +176,7 @@ export default function LandingScreen() {
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
             {recentFiles.map((f) => {
-              const ftLabel = builtinFlowTypes.find((t) => t.id === f.flowType)?.label ?? f.flowType;
+              const ftLabel = findFlowType(f.flowType)?.label ?? f.flowType;
               const date = new Date(f.openedAt).toLocaleDateString(locale);
               return (
                 <div
@@ -197,6 +218,33 @@ export default function LandingScreen() {
       )}
 
       {showModal && <TypePickerModal onClose={() => setShowModal(false)} />}
+      {showSettings && <SettingsModal onClose={() => setShowSettings(false)} />}
+
+      <div style={{ marginTop: 40, display: 'flex', gap: 8, justifyContent: 'center' }}>
+        <button
+          onClick={handleExport}
+          disabled={exporting}
+          style={{
+            padding: '4px 12px', fontSize: 12,
+            border: '0.5px solid var(--color-border-tertiary)',
+            borderRadius: 6, background: 'var(--color-background-info)',
+            color: 'var(--color-text-info)', cursor: exporting ? 'wait' : 'pointer',
+          }}
+        >
+          {exporting ? '导出中...' : '导出运行时代码'}
+        </button>
+        <button
+          onClick={() => setShowSettings(true)}
+          style={{
+            padding: '4px 12px', fontSize: 12,
+            border: '0.5px solid var(--color-border-tertiary)',
+            borderRadius: 6, background: 'transparent',
+            color: 'var(--color-text-tertiary)', cursor: 'pointer',
+          }}
+        >
+          &#9881; 设置
+        </button>
+      </div>
     </div>
   );
 }
