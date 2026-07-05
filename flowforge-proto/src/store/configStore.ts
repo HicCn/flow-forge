@@ -1,10 +1,11 @@
 import { create } from 'zustand';
-import type { FlowType, FlowTypeStatus, NodeDefinition } from '../types';
+import type { FlowType, FlowTypeStatus, NodeDefinition, EnumType } from '../types';
 import { builtinFlowTypes } from '../data/flowTypes';
 import { builtinNodeDefinitions } from '../data/builtinNodes';
 
 const CUSTOM_KEY = 'flowforge_custom_flowtypes';
 const CUSTOM_NODES_KEY = 'flowforge_custom_nodes';
+const CUSTOM_ENUMS_KEY = 'flowforge_custom_enums';
 
 function loadCustom(): FlowType[] {
   try {
@@ -34,9 +35,22 @@ function saveCustomNodes(nodes: NodeDefinition[]) {
   localStorage.setItem(CUSTOM_NODES_KEY, JSON.stringify(nodes));
 }
 
+function loadCustomEnums(): EnumType[] {
+  try {
+    const raw = localStorage.getItem(CUSTOM_ENUMS_KEY);
+    if (!raw) return [];
+    return JSON.parse(raw);
+  } catch { return []; }
+}
+
+function saveCustomEnums(enums: EnumType[]) {
+  localStorage.setItem(CUSTOM_ENUMS_KEY, JSON.stringify(enums));
+}
+
 interface ConfigStore {
   customFlowTypes: FlowType[];
   customNodeDefs: NodeDefinition[];
+  customEnumTypes: EnumType[];
 
   // Flow types
   getFlowTypes: () => FlowType[];
@@ -53,6 +67,13 @@ interface ConfigStore {
   addNodeDef: (def: NodeDefinition) => void;
   updateNodeDef: (type: string, patch: Partial<Pick<NodeDefinition, 'label' | 'description' | 'category' | 'color' | 'flowTypes' | 'params' | 'pins'>>) => void;
   deleteNodeDef: (type: string) => void;
+
+  // Enum types
+  getEnumTypes: () => EnumType[];
+  findEnumType: (id: string) => EnumType | undefined;
+  addEnumType: (enumType: EnumType) => void;
+  updateEnumType: (id: string, patch: Partial<Pick<EnumType, 'label' | 'description' | 'values'>>) => void;
+  deleteEnumType: (id: string) => void;
 }
 
 export const useConfigStore = create<ConfigStore>((set, get) => ({
@@ -213,5 +234,32 @@ export const useConfigStore = create<ConfigStore>((set, get) => ({
     const updated = get().customNodeDefs.filter((n) => n.type !== type);
     saveCustomNodes(updated);
     set({ customNodeDefs: updated });
+  },
+
+  // ── Enum types ──
+  customEnumTypes: loadCustomEnums(),
+
+  getEnumTypes: () => get().customEnumTypes,
+
+  findEnumType: (id) => get().customEnumTypes.find((e) => e.id === id),
+
+  addEnumType: (enumType) => {
+    const updated = [...get().customEnumTypes, enumType];
+    saveCustomEnums(updated);
+    set({ customEnumTypes: updated });
+  },
+
+  updateEnumType: (id, patch) => {
+    const updated = get().customEnumTypes.map((e) =>
+      e.id === id ? { ...e, ...patch } : e
+    );
+    saveCustomEnums(updated);
+    set({ customEnumTypes: updated });
+  },
+
+  deleteEnumType: (id) => {
+    const updated = get().customEnumTypes.filter((e) => e.id !== id);
+    saveCustomEnums(updated);
+    set({ customEnumTypes: updated });
   },
 }));

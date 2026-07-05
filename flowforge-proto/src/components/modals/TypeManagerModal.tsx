@@ -1,10 +1,9 @@
 import { useState, useEffect, useRef } from 'react';
 import { useConfigStore } from '../../store/configStore';
-import { builtinNodeDefinitions } from '../../data/builtinNodes';
 import NodeEditModal from './NodeEditModal';
-import type { FlowType, NodeDefinition } from '../../types';
+import type { FlowType, EnumType } from '../../types';
 
-type Tab = 'flow' | 'node';
+type Tab = 'flow' | 'node' | 'enum';
 
 export default function TypeManagerModal({ onClose, initialTab = 'flow', initialNodeType }: {
   onClose: () => void;
@@ -53,9 +52,13 @@ function TabSwitcher({ initialTab, initialNodeType, onClose }: {
           onClick={() => setTab('node')}
           style={tabBtn(tab === 'node')}
         >节点类型</button>
+        <button
+          onClick={() => setTab('enum')}
+          style={tabBtn(tab === 'enum')}
+        >枚举类型</button>
       </div>
 
-      {tab === 'flow' ? <FlowTypeTab /> : <NodeTypeTab initialNodeType={initialNodeType} />}
+      {tab === 'flow' ? <FlowTypeTab /> : tab === 'node' ? <NodeTypeTab initialNodeType={initialNodeType} /> : <EnumTypeTab />}
     </div>
   );
 }
@@ -163,9 +166,143 @@ function FlowTypeTab() {
   );
 }
 
+// ── Tab: Enum Types ──
+
+function EnumTypeTab() {
+  const customEnumTypes = useConfigStore((s) => s.customEnumTypes);
+  const addEnumType = useConfigStore((s) => s.addEnumType);
+  const updateEnumType = useConfigStore((s) => s.updateEnumType);
+  const deleteEnumType = useConfigStore((s) => s.deleteEnumType);
+
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editLabel, setEditLabel] = useState('');
+  const [editDesc, setEditDesc] = useState('');
+  const [editValues, setEditValues] = useState('');
+  const [showAdd, setShowAdd] = useState(false);
+  const [newId, setNewId] = useState('');
+  const [newLabel, setNewLabel] = useState('');
+  const [newValues, setNewValues] = useState('');
+  const [search, setSearch] = useState('');
+
+  const enumTypes = customEnumTypes;
+  const filtered = search
+    ? enumTypes.filter((e) => e.id.toLowerCase().includes(search.toLowerCase()) || e.label.toLowerCase().includes(search.toLowerCase()))
+    : enumTypes;
+
+  const startEdit = (et: EnumType) => {
+    setEditingId(et.id);
+    setEditLabel(et.label);
+    setEditDesc(et.description);
+    setEditValues(et.values.join(', '));
+  };
+
+  const saveEdit = () => {
+    if (!editingId || !editLabel.trim()) return;
+    updateEnumType(editingId, {
+      label: editLabel.trim(),
+      description: editDesc.trim(),
+      values: editValues.split(',').map((v) => v.trim()).filter(Boolean),
+    });
+    setEditingId(null);
+  };
+
+  const handleAdd = () => {
+    if (!newId.trim() || !newLabel.trim()) return;
+    addEnumType({
+      id: newId.trim(),
+      label: newLabel.trim(),
+      description: '',
+      values: newValues.split(',').map((v) => v.trim()).filter(Boolean),
+      builtin: false,
+    });
+    setNewId(''); setNewLabel(''); setNewValues(''); setShowAdd(false);
+  };
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
+      <div style={{ flexShrink: 0 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8, gap: 8 }}>
+          <input
+            placeholder="搜索枚举..." value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            style={{ flex: 1, padding: '4px 8px', fontSize: 12, border: '0.5px solid var(--color-border-tertiary)', borderRadius: 6, background: 'var(--color-background-secondary)', color: 'var(--color-text-primary)', outline: 'none' }}
+          />
+          <button onClick={() => { setShowAdd(true); setEditingId(null); }} style={primaryBtn()}>+ 新建枚举</button>
+        </div>
+
+        {showAdd && (
+          <div style={{ marginBottom: 12, padding: 12, borderRadius: 8, background: 'var(--color-background-secondary)', border: '0.5px solid var(--color-border-tertiary)' }}>
+            <RowLabel>枚举标识（程序使用，创建后不可修改）</RowLabel>
+            <input placeholder="例: expression_type" value={newId} onChange={(e) => setNewId(e.target.value)} style={inputStyle()} />
+            <RowLabel style={{ marginTop: 6 }}>显示名称</RowLabel>
+            <input placeholder="例: 表情类型" value={newLabel} onChange={(e) => setNewLabel(e.target.value)} style={inputStyle()} />
+            <RowLabel style={{ marginTop: 6 }}>枚举值（逗号分隔）</RowLabel>
+            <input placeholder="例: neutral, happy, angry, sad, surprised" value={newValues} onChange={(e) => setNewValues(e.target.value)} style={inputStyle()} />
+            <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end', marginTop: 8 }}>
+              <button onClick={() => setShowAdd(false)} style={smallBtn()}>取消</button>
+              <button onClick={handleAdd} style={smallBtn('#378ADD', '#fff')}>创建</button>
+            </div>
+          </div>
+        )}
+      </div>
+
+      <div style={{ flex: 1, overflowY: 'auto', minHeight: 0, display: 'flex', flexDirection: 'column', gap: 6 }}>
+        {filtered.map((et) => {
+          if (editingId === et.id) {
+            return (
+              <div key={et.id} style={rowBase(false)}>
+                <div style={{ flex: 1 }}>
+                  <RowLabel>枚举标识（不可修改）</RowLabel>
+                  <div style={readonlyIdStyle()}>{et.id}</div>
+                  <RowLabel style={{ marginTop: 6 }}>显示名称</RowLabel>
+                  <input value={editLabel} onChange={(e) => setEditLabel(e.target.value)} style={inputStyle()} />
+                  <RowLabel style={{ marginTop: 6 }}>描述</RowLabel>
+                  <input value={editDesc} onChange={(e) => setEditDesc(e.target.value)} style={inputStyle()} />
+                  <RowLabel style={{ marginTop: 6 }}>枚举值（逗号分隔）</RowLabel>
+                  <input value={editValues} onChange={(e) => setEditValues(e.target.value)} style={inputStyle()} />
+                </div>
+                <div style={{ display: 'flex', gap: 4, alignSelf: 'flex-start', marginTop: 24 }}>
+                  <button onClick={() => setEditingId(null)} style={smallBtn()}>取消</button>
+                  <button onClick={saveEdit} style={smallBtn('#378ADD', '#fff')}>保存</button>
+                </div>
+              </div>
+            );
+          }
+
+          return (
+            <div key={et.id} style={rowBase(false)}>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--color-text-primary)' }}>
+                  {et.label}
+                </div>
+                <div style={{ fontSize: 11, color: 'var(--color-text-secondary)', marginTop: 1 }}>
+                  <span style={{ color: 'var(--color-text-tertiary)', fontFamily: 'var(--font-mono)', fontSize: 10, marginRight: 8 }}>{et.id}</span>
+                  {et.description}
+                </div>
+                <div style={{ display: 'flex', gap: 3, marginTop: 4, flexWrap: 'wrap' }}>
+                  {et.values.map((v) => (
+                    <span key={v} style={{ fontSize: 9, padding: '1px 5px', borderRadius: 3, background: 'var(--color-background-info)', color: 'var(--color-text-info)' }}>
+                      {v}
+                    </span>
+                  ))}
+                </div>
+              </div>
+              <div style={{ display: 'flex', gap: 4 }}>
+                <button onClick={() => startEdit(et)} style={smallBtn()}>编辑</button>
+                <button onClick={() => { if (confirm('确定删除？')) deleteEnumType(et.id); }} style={smallBtn('#E24B4A', '#fff')}>删除</button>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 // ── Tab: Node Types ──
 
 function NodeTypeTab({ initialNodeType }: { initialNodeType?: string }) {
+  const customNodeDefs = useConfigStore((s) => s.customNodeDefs);  // subscribe for reactivity
   const getNodeDefs = useConfigStore((s) => s.getNodeDefs);
   const deleteNodeDef = useConfigStore((s) => s.deleteNodeDef);
   const getActiveFlowTypes = useConfigStore((s) => s.getActiveFlowTypes);
@@ -189,8 +326,6 @@ function NodeTypeTab({ initialNodeType }: { initialNodeType?: string }) {
       if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
   }, [initialNodeType]);
-
-  const isBuiltin = (nd: NodeDefinition) => builtinNodeDefinitions.some((b) => b.type === nd.type);
 
   return (
     <>
@@ -230,9 +365,7 @@ function NodeTypeTab({ initialNodeType }: { initialNodeType?: string }) {
               </div>
               <div style={{ display: 'flex', gap: 4 }}>
                 <button onClick={() => setEditNodeType(nd.type)} style={smallBtn()}>编辑</button>
-                {!isBuiltin(nd) && (
-                  <button onClick={() => { if (confirm('确定删除？')) deleteNodeDef(nd.type); }} style={smallBtn('#E24B4A', '#fff')}>删除</button>
-                )}
+                <button onClick={() => { if (confirm('确定删除？')) deleteNodeDef(nd.type); }} style={smallBtn('#E24B4A', '#fff')}>删除</button>
               </div>
             </div>
           ))}

@@ -1,13 +1,24 @@
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import { useEditorStore } from '../../store/editorStore';
-import { startDrag } from '../../utils/dragBridge';
+import { useConfigStore } from '../../store/configStore';
+import { startDrag, clearDrag } from '../../utils/dragBridge';
 import { useT } from '../../i18n';
 import TypeManagerModal from '../modals/TypeManagerModal';
 import NodeEditModal from '../modals/NodeEditModal';
 
 export default function NodeLibrary() {
   const { t } = useT();
-  const nodeDefinitions = useEditorStore((s) => s.nodeDefinitions);
+  // Subscribe to customNodeDefs for reactivity when definitions are edited,
+  // then call getNodeDefs() to get the merged builtin + custom list.
+  const customNodeDefs = useConfigStore((s) => s.customNodeDefs);
+  const getNodeDefs = useConfigStore((s) => s.getNodeDefs);
+  const allDefs = getNodeDefs();
+  const flowType = useEditorStore((s) => s.flowType);
+
+  // Filter by flow type: empty flowTypes = all types, otherwise must include current type
+  const nodeDefinitions = flowType
+    ? allDefs.filter((d) => d.flowTypes.length === 0 || d.flowTypes.includes(flowType.id))
+    : allDefs;
   const addNode = useEditorStore((s) => s.addNode);
   const [search, setSearch] = useState('');
   const [collapsed, setCollapsed] = useState(false);
@@ -37,6 +48,27 @@ export default function NodeLibrary() {
       return next;
     });
   };
+
+  // ── Drag with threshold: only start drag after mouse moves > 4px ──
+  const handleNodeMouseDown = useCallback((e: React.MouseEvent, def: typeof nodeDefinitions[0]) => {
+    if (e.button !== 0) return;
+    e.preventDefault();
+    const startX = e.clientX;
+    const startY = e.clientY;
+    const onMove = (ev: MouseEvent) => {
+      if (Math.abs(ev.clientX - startX) + Math.abs(ev.clientY - startY) > 4) {
+        cleanup();
+        startDrag(def.type, def.label, def.color, ev.clientX, ev.clientY);
+      }
+    };
+    const onUp = () => { cleanup(); };
+    const cleanup = () => {
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+    };
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  }, []);
 
   if (collapsed) {
     return (
@@ -80,7 +112,7 @@ export default function NodeLibrary() {
               {!collapsedCategories.has(cat) &&
                 filtered.filter((d) => d.category === cat).map((def) => (
                   <div key={def.type}
-                    onMouseDown={(e) => { e.preventDefault(); startDrag(def.type, def.label, def.color, e.clientX, e.clientY); }}
+                    onMouseDown={(e) => handleNodeMouseDown(e, def)}
                     onDoubleClick={() => addNode(def, { x: 300, y: 200 })}
                     onContextMenu={(e) => { e.preventDefault(); setCtxMenu({ x: e.clientX, y: e.clientY, nodeType: def.type }); }}
                     style={{ padding: '5px 8px', cursor: 'grab', userSelect: 'none', WebkitUserSelect: 'none', display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: 'var(--color-text-primary)' }}
@@ -94,7 +126,7 @@ export default function NodeLibrary() {
             </div>
           ))}
           {filtered.length === 0 && (
-            <div style={{ padding: '12px 8px', fontSize: 11, color: 'var(--color-text-tertiary)', textAlign: 'center' }}>{t('nodeLibrary.noResults')}</div>
+            <div style={{ padding: '12px 8px', fontSize: 11, color: 'var(--color-text-tertiary)', textAlign: 'center' }}>{t('nodeLibrary.noNodes')}</div>
           )}
         </div>
       </div>

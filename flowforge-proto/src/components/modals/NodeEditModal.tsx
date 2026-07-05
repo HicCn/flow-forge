@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useConfigStore } from '../../store/configStore';
-import type { NodeDefinition, ParamDefinition, ParamType, PinDefinition } from '../../types';
+import type { NodeDefinition, ParamDefinition, ParamType, PinDefinition, EnumType } from '../../types';
 
 const PARAM_TYPES: ParamType[] = ['string', 'number', 'float', 'boolean', 'enum', 'text'];
 
@@ -14,6 +14,7 @@ export default function NodeEditModal({ nodeType, onClose }: Props) {
   const addNodeDef = useConfigStore((s) => s.addNodeDef);
   const updateNodeDef = useConfigStore((s) => s.updateNodeDef);
   const getActiveFlowTypes = useConfigStore((s) => s.getActiveFlowTypes);
+  const getEnumTypes = useConfigStore((s) => s.getEnumTypes);
 
   const isCreate = !nodeType;
   const nd = nodeType ? getNodeDefs().find((n) => n.type === nodeType) : null;
@@ -34,6 +35,7 @@ export default function NodeEditModal({ nodeType, onClose }: Props) {
   const [newParamLabel, setNewParamLabel] = useState('');
   const [newParamType, setNewParamType] = useState<ParamType>('string');
   const [newParamSource, setNewParamSource] = useState<'fixed' | 'param' | 'param_or_fixed'>('fixed');
+  const [newParamEnumType, setNewParamEnumType] = useState('');
 
   // Inline param label editing
   const [editingParamIndex, setEditingParamIndex] = useState<number | null>(null);
@@ -76,6 +78,9 @@ export default function NodeEditModal({ nodeType, onClose }: Props) {
 
   const handleAddParam = () => {
     if (!newParamKey.trim() || !newParamLabel.trim()) return;
+    const enumType = newParamType === 'enum' && newParamEnumType
+      ? getEnumTypes().find((e) => e.id === newParamEnumType)
+      : null;
     setParams((prev) => [...prev, {
       key: newParamKey.trim(),
       type: newParamType,
@@ -83,8 +88,9 @@ export default function NodeEditModal({ nodeType, onClose }: Props) {
       default: newParamType === 'boolean' ? false : newParamType === 'float' || newParamType === 'number' ? 0 : '',
       required: false,
       source: newParamSource,
+      ...(enumType ? { enumType: enumType.id, options: enumType.values } : {}),
     }]);
-    setNewParamKey(''); setNewParamLabel(''); setShowAddParam(false);
+    setNewParamKey(''); setNewParamLabel(''); setNewParamEnumType(''); setShowAddParam(false);
   };
 
   const startEditParam = (index: number, currentLabel: string) => {
@@ -290,6 +296,18 @@ export default function NodeEditModal({ nodeType, onClose }: Props) {
                 </select>
               </div>
             </div>
+            {newParamType === 'enum' && (
+              <div style={{ marginBottom: 8 }}>
+                <FormLabel>枚举类型</FormLabel>
+                <select value={newParamEnumType} onChange={(e) => setNewParamEnumType(e.target.value)}
+                  style={selectStyle()}>
+                  <option value="">（内联定义选项）</option>
+                  {getEnumTypes().map((et) => (
+                    <option key={et.id} value={et.id}>{et.label} ({et.values.length} 项)</option>
+                  ))}
+                </select>
+              </div>
+            )}
             <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
               <button onClick={() => setShowAddParam(false)} style={smallBtn()}>取消</button>
               <button onClick={handleAddParam} style={smallBtn('#378ADD', '#fff')}>添加</button>

@@ -19,6 +19,14 @@ export interface FlowType {
   supersededBy?: string;
 }
 
+export interface EnumType {
+  id: string;
+  label: string;
+  description: string;
+  values: string[];
+  builtin: boolean;
+}
+
 export interface PinDefinition {
   id: string;
   label: string;
@@ -34,6 +42,7 @@ export interface ParamDefinition {
   required: boolean;
   source: ParamSource;
   options?: string[];
+  enumType?: string;       // reference to EnumType.id for centralized enum management
   min?: number;
   max?: number;
   placeholder?: string;
