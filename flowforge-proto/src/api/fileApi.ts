@@ -54,12 +54,15 @@ async function browserFetch<T>(url: string, body?: unknown): Promise<T> {
 
 // ── Public API ──
 
-/** Save workflow content to a known file path */
-export async function saveFile(path: string, content: string): Promise<void> {
+/** Save workflow content to a known file path, with optional meta */
+export async function saveFile(path: string, content: string, meta?: unknown): Promise<void> {
   if (await ensureTauri()) {
     await tauriInvoke!('save_file', { path, content });
+    if (meta) {
+      await tauriInvoke!('save_file', { path: path + '.meta', content: JSON.stringify(meta, null, 2) });
+    }
   } else {
-    await browserFetch(`${SERVER_URL}/api/save`, { path, content });
+    await browserFetch(`${SERVER_URL}/api/save`, { path, content, meta });
   }
 }
 
@@ -114,14 +117,16 @@ export async function loadSample(): Promise<{ content: string; path: string } | 
 }
 
 /** Load a file directly by path (for recent file re-opening) */
-export async function loadFile(path: string): Promise<{ content: string; path: string } | null> {
+export async function loadFile(path: string): Promise<{ content: string; path: string; meta?: unknown } | null> {
   if (await ensureTauri()) {
     const content = await tauriInvoke!('open_file', { path }) as string;
-    return { content, path };
+    let meta;
+    try { meta = JSON.parse(await tauriInvoke!('open_file', { path: path + '.meta' }) as string); } catch { }
+    return { content, path, meta };
   } else {
-    const res = await browserFetch<{ content: string | null }>(`${SERVER_URL}/api/load`, { path });
+    const res = await browserFetch<{ content: string | null; meta?: unknown }>(`${SERVER_URL}/api/load`, { path });
     if (!res.content) return null;
-    return { content: res.content, path };
+    return { content: res.content, path, meta: res.meta };
   }
 }
 

@@ -155,6 +155,12 @@ export interface FlowDocument {
   edges: unknown[];
 }
 
+/** Editor-only metadata stored alongside .flow files */
+export interface FlowEditorMeta {
+  /** Per-node comments, keyed by node id */
+  comments: Record<string, string>;
+}
+
 export interface EditorState {
   filePath: string | null;
   isDirty: boolean;

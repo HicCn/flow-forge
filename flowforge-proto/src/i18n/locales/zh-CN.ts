@@ -54,6 +54,8 @@ export const zhCN = {
     noParams: '无可配置参数',
     writesTo: '写入参数',
     nodeId: 'ID:',
+    comment: '注释',
+    commentPlaceholder: '添加节点说明...',
     unsupportedType: '不支持的类型',
     fixed: '固定值',
     param: '参数引用',

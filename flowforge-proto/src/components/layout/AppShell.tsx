@@ -9,6 +9,7 @@ import { useEditorStore } from '../../store/editorStore';
 import { useAppStore } from '../../store/appStore';
 import { saveFile, saveFileAs, exportRuntime } from '../../api/fileApi';
 import { useConfigStore } from '../../store/configStore';
+import { useEditorMetaStore } from '../../store/editorMetaStore';
 import { useEffect, useState } from 'react';
 import { useT } from '../../i18n';
 
@@ -84,8 +85,9 @@ export default function AppShell() {
   const handleSave = async () => {
     try {
       const content = serializeDocument();
+      const meta = { comments: useEditorMetaStore.getState().comments };
       if (filePath) {
-        await saveFile(filePath, content);
+        await saveFile(filePath, content, meta);
       } else {
         const newPath = await saveFileAs(content);
         if (newPath) setFilePath(newPath);

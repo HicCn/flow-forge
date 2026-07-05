@@ -44,8 +44,12 @@ const server = http.createServer(async (req, res) => {
 
   try {
     if (req.method === 'POST' && req.url === '/api/save') {
-      const { path: filePath, content } = await readJsonBody(req);
+      const { path: filePath, content, meta } = await readJsonBody(req);
       fs.writeFileSync(filePath, content, 'utf-8');
+      if (meta) {
+        const metaPath = filePath + '.meta';
+        fs.writeFileSync(metaPath, JSON.stringify(meta, null, 2), 'utf-8');
+      }
       sendJson(res, 200, { ok: true, path: filePath });
     } else if (req.method === 'POST' && req.url === '/api/save-as') {
       const { content } = await readJsonBody(req);
@@ -68,9 +72,13 @@ const server = http.createServer(async (req, res) => {
       const { path: filePath } = await readJsonBody(req);
       if (filePath && fs.existsSync(filePath)) {
         const content = fs.readFileSync(filePath, 'utf-8');
-        sendJson(res, 200, { content });
+        const metaPath = filePath + '.meta';
+        const meta = fs.existsSync(metaPath)
+          ? JSON.parse(fs.readFileSync(metaPath, 'utf-8'))
+          : null;
+        sendJson(res, 200, { content, meta });
       } else {
-        sendJson(res, 200, { content: null });
+        sendJson(res, 200, { content: null, meta: null });
       }
     } else if (req.method === 'POST' && req.url === '/api/export-runtime') {
       const { lang, nodeDefs, flowData } = await readJsonBody(req);

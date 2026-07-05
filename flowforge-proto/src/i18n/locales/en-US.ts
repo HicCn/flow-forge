@@ -57,6 +57,8 @@ export const enUS: typeof zhCN = {
     noParams: 'No configurable parameters',
     writesTo: 'Writes to Parameters',
     nodeId: 'ID:',
+    comment: 'Comment',
+    commentPlaceholder: 'Add node description...',
     unsupportedType: 'Unsupported type',
     fixed: 'Fixed',
     param: 'Param',

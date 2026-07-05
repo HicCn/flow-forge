@@ -3,6 +3,7 @@ import { useConfigStore } from '../../store/configStore';
 import type { ParamValue, ParamDefinition, FlowParameter } from '../../types';
 import { useT } from '../../i18n';
 import { useState, useEffect, useCallback } from 'react';
+import { useEditorMetaStore } from '../../store/editorMetaStore';
 import { loadFile } from '../../api/fileApi';
 
 export default function PropertyPanel() {
@@ -16,6 +17,8 @@ export default function PropertyPanel() {
   const tabs = useEditorStore((s) => s.tabs);
   const openTab = useEditorStore((s) => s.openTab);
   const switchTab = useEditorStore((s) => s.switchTab);
+  const comments = useEditorMetaStore((s) => s.comments);
+  const updateNodeComment = useEditorMetaStore((s) => s.updateNodeComment);
   const [collapsed, setCollapsed] = useState(false);
   const [flowInterface, setFlowInterface] = useState<FlowParameter[] | null>(null);
   const [interfaceLoading, setInterfaceLoading] = useState(false);
@@ -278,6 +281,25 @@ export default function PropertyPanel() {
           ))}
         </div>
       )}
+
+      {/* ── Comment ── */}
+      <div style={{ borderTop: '0.5px solid var(--color-border-tertiary)', padding: '6px 8px' }}>
+        <div style={{ fontSize: 10, fontWeight: 500, color: 'var(--color-text-tertiary)', marginBottom: 4 }}>{t('propertyPanel.comment')}</div>
+        <textarea
+          value={comments[node.id] ?? ''}
+          onChange={(e) => updateNodeComment(node.id, e.target.value)}
+          placeholder={t('propertyPanel.commentPlaceholder')}
+          rows={3}
+          style={{
+            width: '100%', fontSize: 10, padding: '4px 6px',
+            border: '0.5px solid var(--color-border-tertiary)',
+            borderRadius: 4, background: 'var(--color-background-secondary)',
+            color: 'var(--color-text-primary)', outline: 'none',
+            resize: 'vertical', boxSizing: 'border-box',
+            fontFamily: 'var(--font-sans)',
+          }}
+        />
+      </div>
 
       <div style={{ borderTop: '0.5px solid var(--color-border-tertiary)', padding: '6px 8px' }}>
         <div style={{ fontSize: 9, color: 'var(--color-text-tertiary)' }}>{t('propertyPanel.nodeId')}{node.id.slice(0, 8)}...</div>

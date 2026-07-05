@@ -1,12 +1,14 @@
-import { memo } from 'react';
+import React, { memo } from 'react';
 import { Handle, Position, type NodeProps } from '@xyflow/react';
 import type { FlowNodeData } from '../../types';
 import { useConfigStore } from '../../store/configStore';
+import { useEditorMetaStore } from '../../store/editorMetaStore';
 import { useT } from '../../i18n';
 
-function FlowNodeComponent({ data, selected }: NodeProps) {
+function FlowNodeComponent({ data, selected, id: nodeId }: NodeProps) {
   const { t } = useT();
   const d = data as unknown as FlowNodeData;
+  const comment = useEditorMetaStore((s) => s.comments[nodeId] ?? '');
   // Subscribe to customNodeDefs for reactivity when definitions are edited,
   // then call getNodeDefs() (stable function ref) to get merged builtin+custom.
   const customNodeDefs = useConfigStore((s) => s.customNodeDefs);
@@ -31,24 +33,39 @@ function FlowNodeComponent({ data, selected }: NodeProps) {
         maxWidth: 220,
         boxShadow: selected ? '0 0 0 1px rgba(55,138,221,0.3)' : undefined,
         opacity: d.disabled ? 0.45 : 1,
+        position: 'relative',
       }}
     >
+      {/* ── Input handles + labels (outside, left) ── */}
       {pins.inputs.map((pin, i) => {
-        // Compact bottom-up: pin 0 at the bottom, tightly packed upward
-        const topPct = inputCount === 1 ? 50 : 85 - (i * 14);
+        const topPct = inputCount === 1 ? 50 : (100 / (1 + inputCount)) * (inputCount - i);
         return (
-          <Handle
-            key={pin.id}
-            type="target"
-            position={Position.Left}
-            id={pin.id}
-            style={{
-              background: '#888780',
-              width: 8, height: 8,
-              border: 'none',
-              top: `${topPct}%`,
-            }}
-          />
+          <React.Fragment key={pin.id}>
+            <Handle
+              type="target"
+              position={Position.Left}
+              id={pin.id}
+              style={{
+                background: '#888780',
+                width: 8, height: 8,
+                border: 'none',
+                top: `${topPct}%`,
+              }}
+            />
+            {pin.label && (
+              <span style={{
+                position: 'absolute',
+                left: -6,
+                top: `${topPct}%`,
+                transform: 'translate(-100%, -50%)',
+                fontSize: 9, fontWeight: 500,
+                color: 'var(--color-text-tertiary)',
+                pointerEvents: 'none',
+                whiteSpace: 'nowrap',
+                paddingRight: 2,
+              }}>{pin.label}</span>
+            )}
+          </React.Fragment>
         );
       })}
 
@@ -111,24 +128,54 @@ function FlowNodeComponent({ data, selected }: NodeProps) {
             {t('flowNode.writes')}{d.writes.map((w) => w.key).join(', ')}
           </div>
         )}
+        {comment && (
+          <div style={{
+            fontSize: 9,
+            color: 'var(--color-text-tertiary)',
+            fontStyle: 'italic',
+            marginTop: 2,
+            borderTop: '0.5px solid var(--color-border-tertiary)',
+            paddingTop: 2,
+            maxWidth: 200,
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+          }}>
+            {comment}
+          </div>
+        )}
       </div>
 
+      {/* ── Output handles + labels (outside, right) ── */}
       {pins.outputs.map((pin, i) => {
-        // Compact bottom-up: pin 0 at the bottom, tightly packed upward
-        const topPct = outputCount === 1 ? 50 : 85 - (i * 14);
+        const topPct = outputCount === 1 ? 50 : (100 / (1 + outputCount)) * (outputCount - i);
         return (
-          <Handle
-            key={pin.id}
-            type="source"
-            position={Position.Right}
-            id={pin.id}
-            style={{
-              background: '#888780',
-              width: 8, height: 8,
-              border: 'none',
-              top: `${topPct}%`,
-            }}
-          />
+          <React.Fragment key={pin.id}>
+            <Handle
+              type="source"
+              position={Position.Right}
+              id={pin.id}
+              style={{
+                background: '#888780',
+                width: 8, height: 8,
+                border: 'none',
+                top: `${topPct}%`,
+              }}
+            />
+            {pin.label && (
+              <span style={{
+                position: 'absolute',
+                right: -6,
+                top: `${topPct}%`,
+                transform: 'translate(100%, -50%)',
+                fontSize: 9, fontWeight: 500,
+                color: 'var(--color-text-tertiary)',
+                pointerEvents: 'none',
+                whiteSpace: 'nowrap',
+                paddingLeft: 2,
+              }}>{pin.label}</span>
+            )}
+          </React.Fragment>
         );
       })}
     </div>

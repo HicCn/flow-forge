@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useAppStore } from '../store/appStore';
 import { useEditorStore } from '../store/editorStore';
+import { useEditorMetaStore } from '../store/editorMetaStore';
 import { useConfigStore } from '../store/configStore';
 import { openFile, loadFile, exportRuntime } from '../api/fileApi';
 import TypePickerModal from '../components/modals/TypePickerModal';
@@ -93,6 +94,12 @@ export default function LandingScreen() {
       const result = await openFile();
       if (!result) return;
       loadDocFromJson(result.content, result.path);
+      const meta = result.meta;
+      if (meta && typeof meta === 'object' && (meta as any).comments) {
+        useEditorMetaStore.getState().setComments((meta as any).comments);
+      } else {
+        useEditorMetaStore.getState().clearComments();
+      }
     } catch (err) {
       console.error('Open failed:', err);
       alert(t('landing.openFailed'));
@@ -104,6 +111,12 @@ export default function LandingScreen() {
       const result = await loadFile(path);
       if (!result) { alert(t('landing.fileNotFound')); return; }
       loadDocFromJson(result.content, result.path);
+      const meta = result.meta;
+      if (meta && typeof meta === 'object' && (meta as any).comments) {
+        useEditorMetaStore.getState().setComments((meta as any).comments);
+      } else {
+        useEditorMetaStore.getState().clearComments();
+      }
     } catch (err) {
       console.error('Open recent failed:', err);
       alert(t('landing.openFailed'));

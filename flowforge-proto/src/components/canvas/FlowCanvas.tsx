@@ -34,7 +34,6 @@ export default function FlowCanvas() {
   const { t } = useT();
   const nodes = useEditorStore((s) => s.nodes);
   const edges = useEditorStore((s) => s.edges);
-  const setSelection = useEditorStore((s) => s.setSelection);
   const addNode = useEditorStore((s) => s.addNode);
   const addEdge = useEditorStore((s) => s.addEdge);
   const deleteNodes = useEditorStore((s) => s.deleteNodes);
@@ -79,41 +78,31 @@ export default function FlowCanvas() {
     [updateNodePosition]
   );
 
-  const onSelectionChange = useCallback(
-    ({ nodes: selNodes, edges: selEdges }: { nodes: Node[]; edges: any[] }) => {
-      setSelection(
-        selNodes.map((n) => n.id),
-        selEdges.map((e) => e.id)
-      );
-    },
-    [setSelection]
-  );
-
   const onNodeClick: NodeMouseHandler = useCallback(
     (_event, node) => {
-      setSelection([node.id], []);
+      useEditorStore.getState().setSelection([node.id], []);
     },
-    [setSelection]
+    []
   );
 
   const onPaneClick = useCallback(() => {
-    setSelection([], []);
+    useEditorStore.getState().setSelection([], []);
     setContextMenu(null);
-  }, [setSelection]);
+  }, []);
 
   // ── Node right-click → context menu ──
   const onNodeContextMenu = useCallback(
     (event: React.MouseEvent, node: Node) => {
       event.preventDefault();
       event.stopPropagation();
-      setSelection([node.id], []);
+      useEditorStore.getState().setSelection([node.id], []);
       setContextMenu({
         target: { type: 'node', nodeId: node.id },
         x: event.clientX,
         y: event.clientY,
       });
     },
-    [setSelection]
+    []
   );
 
   const onKeyDown = useCallback(
@@ -207,7 +196,6 @@ export default function FlowCanvas() {
         edges={edges}
         onNodesChange={onNodesChange}
         onConnect={onConnect}
-        onSelectionChange={onSelectionChange}
         onNodeClick={onNodeClick}
         onPaneClick={onPaneClick}
         onNodeContextMenu={onNodeContextMenu}
