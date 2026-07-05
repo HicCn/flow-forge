@@ -3,7 +3,6 @@ import {
   ReactFlow,
   Background,
   BackgroundVariant,
-  MiniMap,
   Controls,
   useReactFlow,
   type Node,
@@ -12,6 +11,7 @@ import {
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import { useEditorStore } from '../../store/editorStore';
+import { useConfigStore } from '../../store/configStore';
 import { getDragState, updateDragPosition, clearDrag } from '../../utils/dragBridge';
 import FlowNodeComponent from './FlowNodeComponent';
 import { useT } from '../../i18n';
@@ -40,7 +40,8 @@ export default function FlowCanvas() {
   const deleteNodes = useEditorStore((s) => s.deleteNodes);
   const deleteEdges = useEditorStore((s) => s.deleteEdges);
   const updateNodePosition = useEditorStore((s) => s.updateNodePosition);
-  const nodeDefinitions = useEditorStore((s) => s.nodeDefinitions);
+  const getNodeDefs = useConfigStore((s) => s.getNodeDefs);
+  const customNodeDefs = useConfigStore((s) => s.customNodeDefs);
 
   const { screenToFlowPosition } = useReactFlow();
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
@@ -144,7 +145,7 @@ export default function FlowCanvas() {
       clearDrag();
       setDragGhost(null);
 
-      const def = nodeDefinitions.find((d) => d.type === ds.nodeType);
+      const def = getNodeDefs().find((d) => d.type === ds.nodeType);
       if (!def) return;
 
       const position = screenToFlowPosition({
@@ -154,7 +155,7 @@ export default function FlowCanvas() {
 
       addNode(def, position);
     },
-    [nodeDefinitions, screenToFlowPosition, addNode]
+    [customNodeDefs, screenToFlowPosition, addNode]
   );
 
   const onCanvasMouseMove = useCallback((event: React.MouseEvent) => {
@@ -182,12 +183,12 @@ export default function FlowCanvas() {
     (nodeId: string) => {
       const node = useEditorStore.getState().nodes.find((n) => n.id === nodeId);
       if (!node) return;
-      const def = nodeDefinitions.find((d) => d.type === node.data.nodeType);
+      const def = getNodeDefs().find((d) => d.type === node.data.nodeType);
       if (!def) return;
       addNode(def, { x: node.position.x + 40, y: node.position.y + 40 });
       setContextMenu(null);
     },
-    [nodeDefinitions, addNode]
+    [customNodeDefs, addNode]
   );
 
   // ── Render ──
@@ -217,10 +218,6 @@ export default function FlowCanvas() {
       >
         <Background variant={BackgroundVariant.Dots} gap={24} size={1} color="var(--color-border-tertiary)" />
         <Controls />
-        <MiniMap
-          nodeColor={(node) => (node.data as any)?.color ?? '#888780'}
-          style={{ background: 'var(--color-background-secondary)' }}
-        />
       </ReactFlow>
 
       {/* Ghost preview during drag */}
