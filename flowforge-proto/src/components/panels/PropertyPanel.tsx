@@ -1,4 +1,5 @@
 import { useEditorStore } from '../../store/editorStore';
+import { useConfigStore } from '../../store/configStore';
 import type { ParamValue, ParamDefinition, FlowParameter } from '../../types';
 import { useT } from '../../i18n';
 import { useState, useEffect, useCallback } from 'react';
@@ -9,7 +10,8 @@ export default function PropertyPanel() {
   const nodes = useEditorStore((s) => s.nodes);
   const selectedNodeIds = useEditorStore((s) => s.selectedNodeIds);
   const parameters = useEditorStore((s) => s.parameters);
-  const nodeDefinitions = useEditorStore((s) => s.nodeDefinitions);
+  const getNodeDefs = useConfigStore((s) => s.getNodeDefs);
+  const customNodeDefs = useConfigStore((s) => s.customNodeDefs);
   const updateNodeParam = useEditorStore((s) => s.updateNodeParam);
   const tabs = useEditorStore((s) => s.tabs);
   const openTab = useEditorStore((s) => s.openTab);
@@ -110,7 +112,7 @@ export default function PropertyPanel() {
   const node = nodes.find((n) => n.id === nodeId);
   if (!node) return null;
 
-  const def = nodeDefinitions.find((d) => d.type === node.data.nodeType);
+  const def = getNodeDefs().find((d) => d.type === node.data.nodeType);
   const params = def?.params ?? [];
   const isFlowCall = node.data.nodeType === 'flow_call';
   const targetFlow = isFlowCall ? String(node.data.params?.target_flow?.value ?? '') : '';
